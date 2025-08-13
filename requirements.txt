@@ -2,5 +2,5 @@ streamlit
 pandas
 numpy
 matplotlib
-scikit-learn==[versi dari Colab]
-joblib==[versi dari Colab]
+scikit-learn
+joblib
