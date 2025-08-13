@@ -18,13 +18,13 @@ st.markdown("Aplikasi interaktif untuk memprediksi risiko kredit nasabah berdasa
 @st.cache_resource
 def load_assets():
     try:
-        model = joblib.load("random_forest_model.joblib(1)")
+        model = joblib.load("random_forest_model.joblib")
     except Exception as e:
         st.stop()
         st.error(f"❌ Gagal memuat model: {e}")
 
     try:
-        scaler = joblib.load("scaler.joblib(1)")
+        scaler = joblib.load("scaler.joblib")
     except FileNotFoundError:
         scaler = None
         st.warning("⚠ Scaler tidak ditemukan. Data akan digunakan tanpa scaling.")
