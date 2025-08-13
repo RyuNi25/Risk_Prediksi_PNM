@@ -1,71 +1,73 @@
 import streamlit as st
 import pandas as pd
-import pickle
+import joblib
 import numpy as np
 import matplotlib.pyplot as plt
 
-# =====================
-# Load Model & Scaler
-# =====================
-with open("random_forest_model.pkl", "rb") as f:
-    model = pickle.load(f)
+# =========================
+# Load model & scaler
+# =========================
+model = joblib.load("random_forest_model.joblib")  # file hasil export dari Colab
+scaler = joblib.load("scaler.joblib")              # scaler hasil export dari Colab
 
-with open("scaler.pkl", "rb") as f:
-    scaler = pickle.load(f)
+# =========================
+# Judul
+# =========================
+st.set_page_config(page_title="Prediksi Risiko Kredit Mekaar PNM", layout="wide")
+st.title("🔍 Deteksi Dini Risiko Kredit Mekaar PNM")
+st.markdown("Aplikasi interaktif untuk memprediksi risiko kredit nasabah berdasarkan data historis.")
 
-# =====================
-# Judul Aplikasi
-# =====================
-st.title("📊 Sistem Evaluasi Kelayakan Kredit Mikro")
-st.markdown("Aplikasi ini memprediksi kelayakan kredit berdasarkan data historis nasabah.")
+# =========================
+# Form Input
+# =========================
+st.sidebar.header("Masukkan Data Nasabah")
 
-# =====================
-# Input Data
-# =====================
-st.subheader("Masukkan Data Nasabah")
+ODInterest = st.sidebar.number_input("ODInterest (Tunggakan Bunga)", min_value=0.0)
+ODPrincipal = st.sidebar.number_input("ODPrincipal (Tunggakan Pokok)", min_value=0.0)
+PrincipalDue = st.sidebar.number_input("PrincipalDue (Pokok Terhutang)", min_value=0.0)
+InterestDue = st.sidebar.number_input("InterestDue (Bunga Terhutang)", min_value=0.0)
+NoOfArrearDays = st.sidebar.number_input("NoOfArrearDays (Hari Tunggakan)", min_value=0)
 
-feature_names = model.feature_names_in_
-
-# Form input untuk setiap fitur
-input_data = []
-for feature in feature_names:
-    val = st.number_input(f"{feature}", value=0.0)
-    input_data.append(val)
-
-# =====================
+# =========================
 # Prediksi
-# =====================
-if st.button("Prediksi"):
-    # Ubah menjadi array 2D
-    input_array = np.array(input_data).reshape(1, -1)
+# =========================
+if st.sidebar.button("Prediksi Risiko"):
+    # Susun input jadi DataFrame
+    input_data = pd.DataFrame([[
+        ODInterest, ODPrincipal, PrincipalDue, InterestDue, NoOfArrearDays
+    ]], columns=["ODInterest", "ODPrincipal", "PrincipalDue", "InterestDue", "NoOfArrearDays"])
 
     # Scaling
-    input_scaled = scaler.transform(input_array)
+    try:
+        input_scaled = scaler.transform(input_data)
+    except Exception as e:
+        st.warning(f"⚠ Gagal melakukan scaling: {e}")
+        input_scaled = input_data
 
     # Prediksi
-    pred = model.predict(input_scaled)[0]
-    proba = model.predict_proba(input_scaled)[0]
+    prediction = model.predict(input_scaled)[0]
+    proba = model.predict_proba(input_scaled)[0][1]  # Probabilitas risiko tinggi
 
-    st.write(f"### Hasil Prediksi: **{'Layak' if pred == 1 else 'Tidak Layak'}**")
-    st.write(f"Probabilitas Layak: {proba[1]*100:.2f}%")
-    st.write(f"Probabilitas Tidak Layak: {proba[0]*100:.2f}%")
+    # Hasil
+    st.subheader("📊 Hasil Prediksi")
+    if prediction == 1:
+        st.error(f"⚠ Risiko Tinggi — Probabilitas: {proba:.2%}")
+    else:
+        st.success(f"✅ Risiko Rendah — Probabilitas: {proba:.2%}")
 
-    # =====================
-    # Feature Importance
-    # =====================
-    st.subheader("📌 Feature Importance")
+# =========================
+# Feature Importance
+# =========================
+if hasattr(model, "feature_importances_"):
+    st.subheader("📌 Faktor Terpenting dalam Prediksi")
     feature_importance = pd.DataFrame({
-        "Fitur": feature_names,
+        "Fitur": ["ODInterest", "ODPrincipal", "PrincipalDue", "InterestDue", "NoOfArrearDays"],
         "Importance": model.feature_importances_
     }).sort_values(by="Importance", ascending=False)
 
-    st.dataframe(feature_importance)
-
-    # Plot Grafik
     fig, ax = plt.subplots()
-    ax.barh(feature_importance["Fitur"], feature_importance["Importance"], color='skyblue')
-    ax.invert_yaxis()
-    ax.set_xlabel("Importance")
+    ax.barh(feature_importance["Fitur"], feature_importance["Importance"], color="skyblue")
+    ax.set_xlabel("Tingkat Kepentingan")
     ax.set_ylabel("Fitur")
-    ax.set_title("Feature Importance")
+    ax.invert_yaxis()
     st.pyplot(fig)
