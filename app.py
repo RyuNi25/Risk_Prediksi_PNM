@@ -16,9 +16,9 @@ st.markdown("Aplikasi interaktif untuk **analisis data pinjaman** dan **prediksi
 # Load Model & Scaler (jika ada)
 # =========================
 model, scaler = None, None
-if os.path.exists("random_forest_model.joblib") and os.path.exists("scaler.joblib"):
-    model = joblib.load("random_forest_model.joblib")
-    scaler = joblib.load("scaler.joblib")
+if os.path.exists("random_forest_model.joblib(1)") and os.path.exists("scaler.joblib"):
+    model = joblib.load("random_forest_model.joblib(1)")
+    scaler = joblib.load("scaler.joblib(1)")
 else:
     st.warning("⚠ Model atau scaler belum ditemukan. Fitur prediksi mungkin tidak aktif.")
 
