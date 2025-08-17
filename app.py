@@ -4,7 +4,7 @@ import numpy as np
 import joblib
 import matplotlib.pyplot as plt
 import json
-from io import BytesIO
+from io import StringIO
 
 st.set_page_config(page_title="Prediksi Risiko Kredit Mekaar PNM", layout="wide")
 st.title("🔍 Deteksi Dini Risiko Kredit Mekaar PNM")
@@ -45,6 +45,7 @@ with tab1:
     st.header("📊 Analisis Data Pinjaman Nasabah")
 
     if uploaded_csv is not None:
+        # coba baca dengan auto detect delimiter
         try:
             df = pd.read_csv(uploaded_csv, sep=None, engine="python")
         except Exception:
@@ -53,9 +54,11 @@ with tab1:
         st.subheader("📑 Data Nasabah")
         st.dataframe(df.head())
 
+        # Ringkasan Data
         st.subheader("📊 Ringkasan Data")
         st.write(df.describe(include="all"))
 
+        # Korelasi Antar Variabel
         st.subheader("📌 Korelasi Antar Variabel")
         try:
             corr = df.corr(numeric_only=True)
@@ -83,12 +86,13 @@ with tab2:
             st.warning("⚠ Feature names JSON tidak ditemukan. Input field mungkin tidak sesuai.")
             feature_names = ["ODInterest", "ODPrincipal", "PrincipalDue", "InterestDue", "NoOfArrearDays"]
 
+        # Buat form input otomatis
         st.subheader("📥 Masukkan Data Nasabah")
         input_data = {}
         for feat in feature_names:
-            if "Day" in feat or "Term" in feat:
+            if "Day" in feat or "Term" in feat:  # kemungkinan integer
                 val = st.number_input(feat, min_value=0, value=0)
-            else:
+            else:  # kemungkinan float
                 val = st.number_input(feat, min_value=0.0, value=0.0)
             input_data[feat] = val
 
@@ -109,22 +113,7 @@ with tab2:
             else:
                 st.success(f"✅ Risiko Rendah — Probabilitas: {proba:.2%}")
 
-            # =====================
-            # Export hasil prediksi
-            # =====================
-            df_input["Prediksi"] = ["Risiko Tinggi" if prediction == 1 else "Risiko Rendah"]
-            df_input["Probabilitas Risiko Tinggi"] = proba
-
-            st.subheader("💾 Simpan Hasil Prediksi")
-            csv = df_input.to_csv(index=False).encode("utf-8")
-            excel_buffer = BytesIO()
-            with pd.ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
-                df_input.to_excel(writer, index=False, sheet_name="Hasil Prediksi")
-
-            st.download_button("⬇️ Download CSV", data=csv, file_name="hasil_prediksi.csv", mime="text/csv")
-            st.download_button("⬇️ Download Excel", data=excel_buffer.getvalue(),
-                               file_name="hasil_prediksi.xlsx", mime="application/vnd.ms-excel")
-
+        # Feature Importance
         if hasattr(model, "feature_importances_"):
             st.subheader("📌 Faktor Terpenting dalam Prediksi")
             feature_importance = pd.DataFrame({
