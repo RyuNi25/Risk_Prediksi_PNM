@@ -3,85 +3,81 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import joblib
+import json
 
-st.set_page_config(page_title="Deteksi Risiko Kredit Mekaar PNM", layout="wide")
+st.set_page_config(page_title="Prediksi Risiko Kredit Mekaar PNM", layout="wide")
 
 st.title("🔍 Deteksi Dini Risiko Kredit Mekaar PNM")
 st.write("Aplikasi interaktif untuk analisis data pinjaman dan prediksi risiko kredit nasabah.")
 
-
 # ================================
-# 1. Upload Data Nasabah
+# 1. Load Model, Scaler, Feature Names
 # ================================
-st.sidebar.header("📂 Upload Dataset")
-uploaded_file = st.sidebar.file_uploader("Upload file CSV", type=["csv"])
+try:
+    model = joblib.load("random_forest_model.joblib")
+    scaler = joblib.load("scaler.joblib")
 
-if uploaded_file:
-    data = pd.read_csv(uploaded_file)
-    st.subheader("📊 Data Nasabah")
-    st.dataframe(data.head())
+    with open("feature_names.json", "r") as f:
+        feature_names = json.load(f)
 
-    # Statistik deskriptif
-    st.subheader("📈 Statistik Deskriptif")
-    st.write(data.describe())
-
-    # Korelasi antar variabel
-    st.subheader("🔗 Korelasi Antar Variabel")
-    corr = data.corr(numeric_only=True)
-    fig, ax = plt.subplots()
-    cax = ax.matshow(corr, cmap="coolwarm")
-    fig.colorbar(cax)
-    st.pyplot(fig)
-
-
-# ================================
-# 2. Upload Model & Scaler
-# ================================
-st.sidebar.header("🤖 Upload Model")
-uploaded_model = st.sidebar.file_uploader("Upload file model (joblib)", type=["joblib"])
-uploaded_scaler = st.sidebar.file_uploader("Upload file scaler (joblib)", type=["joblib"])
-
-model = None
-scaler = None
-
-if uploaded_model is not None:
-    model = joblib.load(uploaded_model)
-if uploaded_scaler is not None:
-    scaler = joblib.load(uploaded_scaler)
-
-if model is not None and scaler is not None:
     st.sidebar.success("✅ Model & Scaler berhasil dimuat.")
-else:
-    st.sidebar.warning("⚠️ Model & Scaler belum tersedia. Upload dulu file `.joblib`.")
+except Exception as e:
+    st.sidebar.error(f"⚠️ Gagal load model atau scaler: {e}")
+    model, scaler, feature_names = None, None, []
 
+# ================================
+# 2. Input Manual Nasabah
+# ================================
+st.sidebar.header("📌 Masukkan Data Nasabah")
+
+ODInterest = st.sidebar.number_input("ODInterest (Tunggakan Bunga)", min_value=0.0, value=0.0)
+ODPrincipal = st.sidebar.number_input("ODPrincipal (Tunggakan Pokok)", min_value=0.0, value=0.0)
+PrincipalDue = st.sidebar.number_input("PrincipalDue (Pokok Terhutang)", min_value=0.0, value=0.0)
+InterestDue = st.sidebar.number_input("InterestDue (Bunga Terhutang)", min_value=0.0, value=0.0)
+NoOfArrearDays = st.sidebar.number_input("NoOfArrearDays (Hari Tunggakan)", min_value=0, value=0)
 
 # ================================
 # 3. Prediksi Risiko Kredit
 # ================================
-st.subheader("🧮 Prediksi Risiko Kredit")
+if st.sidebar.button("Prediksi Risiko"):
 
-if model is not None and scaler is not None and uploaded_file:
-    # Pilih 1 nasabah untuk prediksi
-    nasabah_index = st.number_input("Pilih index nasabah untuk prediksi", min_value=0, max_value=len(data)-1, value=0)
-    nasabah_data = data.iloc[nasabah_index:nasabah_index+1]
+    if model is None or scaler is None or not feature_names:
+        st.error("⚠️ Model/Scaler/Feature Names belum dimuat.")
+    else:
+        # Susun input ke DataFrame
+        input_data = pd.DataFrame([[
+            ODInterest, ODPrincipal, PrincipalDue, InterestDue, NoOfArrearDays
+        ]], columns=["ODInterest", "ODPrincipal", "PrincipalDue", "InterestDue", "NoOfArrearDays"])
 
-    st.write("📌 Data Nasabah Terpilih")
-    st.write(nasabah_data)
+        # Reindex agar sesuai dengan urutan fitur saat training
+        input_data = input_data.reindex(columns=feature_names, fill_value=0)
 
-    # Preprocessing
-    try:
-        X_scaled = scaler.transform(nasabah_data.select_dtypes(include=np.number))
+        # Scaling
+        X_scaled = scaler.transform(input_data)
 
         # Prediksi
         prediction = model.predict(X_scaled)[0]
-        proba = model.predict_proba(X_scaled)[0][1]  # probabilitas risiko
+        proba = model.predict_proba(X_scaled)[0]
 
-        st.subheader("📢 Hasil Prediksi")
+        st.subheader("📊 Hasil Prediksi")
         if prediction == 1:
-            st.error(f"🚨 Nasabah ini berisiko Gagal Bayar. Probabilitas: {proba:.2f}")
+            st.error(f"🚨 Risiko Tinggi — Probabilitas: {proba[1]:.2%}")
         else:
-            st.success(f"✅ Nasabah ini diprediksi Aman Bayar. Probabilitas Risiko: {proba:.2f}")
-    except Exception as e:
-        st.error(f"Terjadi error saat prediksi: {e}")
-else:
-    st.info("Upload dataset + model + scaler untuk mulai prediksi.")
+            st.success(f"✅ Risiko Rendah — Probabilitas: {proba[0]:.2%}")
+
+# ================================
+# 4. Feature Importance
+# ================================
+if model is not None and hasattr(model, "feature_importances_"):
+    st.subheader("📌 Faktor Terpenting dalam Prediksi")
+    feature_importance = pd.DataFrame({
+        "Fitur": feature_names,
+        "Importance": model.feature_importances_
+    }).sort_values(by="Importance", ascending=False)
+
+    fig, ax = plt.subplots()
+    ax.barh(feature_importance["Fitur"], feature_importance["Importance"], color="skyblue")
+    ax.set_xlabel("Tingkat Kepentingan")
+    ax.set_ylabel("Fitur")
+    ax.invert_yaxis()
+    st.pyplot(fig)
